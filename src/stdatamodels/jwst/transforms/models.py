@@ -1586,7 +1586,7 @@ def _find_min_with_linear_interpolation(resid, t0):
 class NIRISSBackwardGrismDispersion(_BackwardGrismDispersionBase):
     """Calculate the dispersion extent of NIRISS pixels."""
 
-    def __init__(self, orders, lmodels=None, xmodels=None, ymodels=None, theta=0.0):
+    def __init__(self, orders, lmodels=None, xmodels=None, ymodels=None, theta=0.0, pivot_wavelength=1.05):
         """
         Initialize the model.
 
@@ -1613,8 +1613,11 @@ class NIRISSBackwardGrismDispersion(_BackwardGrismDispersionBase):
             The outer list corresponds to the different spectral orders.
         theta : float
             Angle [deg] - defines the NIRISS filter wheel position
+        pivot_wavelength : float
+            Pivot wavelength for FWCPOS rotation, in microns. The rotation is always around this wavelength in in the +1 order.
         """
         self.theta = theta
+        self.pivot_wavelength = pivot_wavelength
         name = "niriss_backward_grism_dispersion"
         super().__init__(
             orders,
@@ -1672,8 +1675,16 @@ class NIRISSBackwardGrismDispersion(_BackwardGrismDispersionBase):
 
         # rotate by theta
         if self.theta != 0.0:
+            # Pivot is always the +1 order trace at pivot_wavelength
+            iorder_1 = self._order_mapping[1]
+            t_pivot = self.lmodels[iorder_1](self.pivot_wavelength)
+            dx_piv = _poly_with_spatial_dependence(t_pivot, x, y, self.xmodels[iorder_1])
+            dy_piv = _poly_with_spatial_dependence(t_pivot, x, y, self.ymodels[iorder_1])
+
             rotate = Rotation2D(self.theta)
-            dx, dy = rotate(dx, dy)
+            ddx, ddy = rotate(dx - dx_piv, dy - dy_piv)
+            dx = dx_piv + ddx
+            dy = dy_piv + ddy
 
         return x + dx, y + dy, x, y, order
 
@@ -1739,8 +1750,15 @@ class _WFSSForwardGrismDispersion(_ForwardGrismDispersionBase):
         dy = _poly_with_spatial_dependence(t, x00, y00, ymodel)
 
         if self.theta != 0.0:
+
+            iorder_1  = self._order_mapping[1]
+            t_pivot = self.lmodels[iorder_1](self.pivot_wavelength)
+            dx_piv = _poly_with_spatial_dependence(t_pivot, x00, y00, self.xmodels[iorder_1])
+            dy_piv = _poly_with_spatial_dependence(t_pivot, x00, y00, self.ymodels[iorder_1])
+
             rotate = Rotation2D(self.theta)
-            dx, dy = rotate(dx, dy)
+            ddx, ddy = rotate(dx - dx_piv, dy - dy_piv)
+            dx, dy = dx_piv + ddx, dy_piv + ddy
 
         if self.dispaxis == "row":
             alongdisp = dx
@@ -1780,6 +1798,7 @@ class NIRISSForwardRowGrismDispersion(_WFSSForwardGrismDispersion):
         ymodels=None,
         theta=0.0,
         sampling=10,
+        pivot_wavelength=1.05,
     ):
         """
         Initialize the model.
@@ -1809,8 +1828,11 @@ class NIRISSForwardRowGrismDispersion(_WFSSForwardGrismDispersion):
             Angle [deg] - defines the NIRISS filter wheel position
         sampling : int, optional
             Number of sampling points in t to use; these will be linearly interpolated.
+        pivot_wavelength : float, optional
+            Pivot wavelength for FWCPOS rotation, in microns. The rotation is always around this wavelength in the +1 order.
         """
         self.theta = theta
+        self.pivot_wavelength = pivot_wavelength
         dispaxis = "row"
         name = "niriss_forward_row_grism_dispersion"
         super().__init__(
@@ -1821,6 +1843,7 @@ class NIRISSForwardRowGrismDispersion(_WFSSForwardGrismDispersion):
             ymodels=ymodels,
             name=name,
             sampling=sampling,
+            pivot_wavelength=pivot_wavelength,
         )
 
 
@@ -1842,6 +1865,7 @@ class NIRISSForwardColumnGrismDispersion(_WFSSForwardGrismDispersion):
         ymodels=None,
         theta=None,
         sampling=10,
+        pivot_wavelength=1.05,
     ):
         """
         Initialize the model.
@@ -1871,8 +1895,12 @@ class NIRISSForwardColumnGrismDispersion(_WFSSForwardGrismDispersion):
             Angle [deg] - defines the NIRISS filter wheel position
         sampling : int, optional
             Number of sampling points in t to use; these will be linearly interpolated.
+        pivot_wavelength : float, optional
+            Pivot wavelength for FWCPOS rotation, in microns. The rotation is always around this wavelength in the +1 order.
+
         """
         self.theta = theta
+        self.pivot_wavelength = pivot_wavelength
         dispaxis = "column"
         name = "niriss_forward_column_grism_dispersion"
         super().__init__(
@@ -1883,6 +1911,7 @@ class NIRISSForwardColumnGrismDispersion(_WFSSForwardGrismDispersion):
             ymodels=ymodels,
             name=name,
             sampling=sampling,
+            pivot_wavelength=pivot_wavelength,
         )
 
 
